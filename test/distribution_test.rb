@@ -4,6 +4,18 @@ require "test_helper"
 
 class DistributionTest < Minitest::Test
   N = 10_000
+  # Kolmogorov-Smirnov critical value at alpha = 0.01 for large N.
+  KS_CRITICAL = 1.628 / Math.sqrt(N)
+  # Evenly spaced quantiles: a noise-free stand-in for a sample from a distribution.
+  QUANTILE_GRID = Array.new(N) { |i| (i + 0.5) / N }.freeze
+
+  DEFAULTS = {
+    mean_interval: Triplepat::SyntheticAlert::DEFAULT_MEAN_INTERVAL,
+    min_interval: Triplepat::SyntheticAlert::DEFAULT_MIN_INTERVAL,
+    max_interval: Triplepat::SyntheticAlert::DEFAULT_MAX_INTERVAL,
+  }.freeze
+  # exp(-max/mean) is exactly 0.0 here, the regime survival-space sampling exists for.
+  FAR_MAX = { mean_interval: 1.0, min_interval: 1.0, max_interval: 1_000_000.0, firing_duration: 0.5 }.freeze
 
   def test_every_gap_lies_within_bounds
     alert = Triplepat::SyntheticAlert.new(
@@ -43,59 +55,49 @@ class DistributionTest < Minitest::Test
     end
   end
 
-  # Kolmogorov-Smirnov critical value at alpha = 0.01 for large N.
-  KS_CRITICAL = 1.628 / Math.sqrt(N)
-  # Evenly spaced quantiles: a noise-free stand-in for a sample from a distribution.
-  QUANTILE_GRID = Array.new(N) { |i| (i + 0.5) / N }.freeze
-
   # A correct sampler fails one attempt about 1% of the time by construction;
   # three attempts bring the false-failure rate to about 1e-6. The wrong
   # samplers below fail every attempt.
-  def test_gaps_are_memoryless
-    alert = Triplepat::SyntheticAlert.new
-    mean, lo, hi = params(alert)
-    statistics = Array.new(3) do
-      ks_statistic(Array.new(N) { alert.send(:gap) }, mean, lo, hi)
-    end
+  def test_gaps_follow_the_truncated_exponential
+    [DEFAULTS, FAR_MAX].each do |window|
+      alert = Triplepat::SyntheticAlert.new(**window)
+      statistics = Array.new(3) { ks_statistic(Array.new(N) { alert.send(:gap) }, **window) }
 
-    assert_operator statistics.min, :<=, KS_CRITICAL,
-                    "K-S statistics #{statistics.map { |d| d.round(4) }} all exceed #{KS_CRITICAL.round(4)}"
+      assert_operator statistics.min, :<=, KS_CRITICAL,
+                      "#{window}: K-S statistics #{statistics.map do |d|
+                        d.round(4)
+                      end} all exceed #{KS_CRITICAL.round(4)}"
+    end
   end
 
   def test_ks_test_rejects_a_clamped_exponential
-    assert_rejects { |mean, lo, hi| QUANTILE_GRID.map { |u| (-mean * Math.log(1.0 - u)).clamp(lo, hi) } }
+    assert_operator ks_for { |mean, lo, hi| QUANTILE_GRID.map { |u| (-mean * Math.log(1.0 - u)).clamp(lo, hi) } },
+                    :>, KS_CRITICAL
   end
 
   def test_ks_test_rejects_a_uniform
-    assert_rejects { |_mean, lo, hi| QUANTILE_GRID.map { |u| lo + (u * (hi - lo)) } }
+    assert_operator ks_for { |_mean, lo, hi| QUANTILE_GRID.map { |u| lo + (u * (hi - lo)) } }, :>, KS_CRITICAL
   end
 
   def test_ks_test_rejects_a_mean_off_by_a_quarter
-    assert_rejects { |mean, lo, hi| QUANTILE_GRID.map { |u| truncated_quantile(u, mean * 1.25, lo, hi) } }
+    assert_operator ks_for { |mean, lo, hi| QUANTILE_GRID.map { |u| truncated_quantile(u, mean * 1.25, lo, hi) } },
+                    :>, KS_CRITICAL
   end
 
   # Positive control: noise-free quantiles of the right distribution pass.
   def test_ks_test_accepts_the_right_distribution
-    mean, lo, hi = params(Triplepat::SyntheticAlert.new)
-    samples = QUANTILE_GRID.map { |u| truncated_quantile(u, mean, lo, hi) }
-
-    assert_operator ks_statistic(samples, mean, lo, hi), :<, KS_CRITICAL
+    assert_operator ks_for { |mean, lo, hi| QUANTILE_GRID.map { |u| truncated_quantile(u, mean, lo, hi) } },
+                    :<, KS_CRITICAL
   end
 
   private
 
-  def params(alert)
-    %i[@mean @min @max].map { |ivar| alert.instance_variable_get(ivar) }
-  end
-
-  # Prove the test has teeth: the block builds samples from a wrong
-  # distribution with the default parameters, and the statistic must exceed
-  # the critical value.
-  def assert_rejects
-    mean, lo, hi = params(Triplepat::SyntheticAlert.new)
-    samples = yield(mean, lo, hi)
-
-    assert_operator ks_statistic(samples, mean, lo, hi), :>, KS_CRITICAL
+  # The K-S statistic of samples the block builds for the default window. The
+  # negative controls prove the test has teeth; the positive control proves it
+  # is not simply rejecting everything.
+  def ks_for
+    samples = yield(*DEFAULTS.values_at(:mean_interval, :min_interval, :max_interval))
+    ks_statistic(samples, **DEFAULTS)
   end
 
   def survival(point, mean)
@@ -113,11 +115,11 @@ class DistributionTest < Minitest::Test
   end
 
   # Largest distance between the empirical CDF of the samples and the
-  # truncated exponential CDF.
-  def ks_statistic(samples, mean, low, high)
+  # truncated exponential CDF for the given window.
+  def ks_statistic(samples, mean_interval:, min_interval:, max_interval:, **)
     count = samples.size.to_f
     samples.sort.each_with_index.reduce(0.0) do |distance, (point, index)|
-      theoretical = truncated_cdf(point, mean, low, high)
+      theoretical = truncated_cdf(point, mean_interval, min_interval, max_interval)
       [distance, (((index + 1) / count) - theoretical).abs, ((index / count) - theoretical).abs].max
     end
   end

@@ -108,7 +108,10 @@ module Triplepat
     # Returns the duration as a Float so the sampler's divisions are never
     # Integer floor divisions, which would silently distort the distribution.
     def duration(name, value)
-      raise ArgumentError, "#{name} must be a number, got #{value.inspect}" unless value.is_a?(Numeric)
+      unless value.is_a?(Numeric) && value.real?
+        raise ArgumentError,
+              "#{name} must be a real number, got #{value.inspect}"
+      end
 
       value = value.to_f
       # NaN compares false to everything, so it needs the explicit finite? check.

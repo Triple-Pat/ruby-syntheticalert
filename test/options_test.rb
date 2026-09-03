@@ -33,10 +33,10 @@ class OptionsTest < Minitest::Test
   end
 
   def test_each_duration_must_be_a_number
-    [nil, "60", :sixty].each do |bad|
+    [nil, "60", :sixty, Complex(60, 1)].each do |bad|
       error = assert_raises(ArgumentError, bad.inspect) { Triplepat::SyntheticAlert.new(mean_interval: bad) }
 
-      assert_match(/must be a number/, error.message)
+      assert_match(/must be a real number/, error.message)
     end
   end
 
