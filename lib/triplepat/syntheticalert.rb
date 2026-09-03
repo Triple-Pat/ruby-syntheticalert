@@ -62,6 +62,46 @@ module Triplepat
       @next_transition = clock.call + gap
     end
 
+    # Returns 1.0 if the synthetic alert should be firing right now and 0.0
+    # otherwise. Replays every schedule transition between the last call and
+    # now, so the realized schedule is the same whatever the scrape cadence.
+    def value
+      # Why carry state and replay transitions, rather than compute the state
+      # from the clock alone?
+      #
+      # A stateless answer to "is a firing in progress?" needs the firing times
+      # to be a pure function of wall-clock time. That is possible for a plain
+      # Poisson process, because it has independent increments: chop time into
+      # epochs, seed a PRNG from the epoch index, draw that epoch's arrivals,
+      # and check whether one falls within the last firing duration. It has a
+      # real attraction, too: every replica of a service would compute the
+      # same schedule and raise one alert instead of N.
+      #
+      # But the min and max bounds on the silent gap make each gap depend on
+      # where the previous firing ended, which destroys independent increments;
+      # epochs can no longer be generated in isolation. Thinning and
+      # back-filling a plain Poisson stream to fake the bounds would have to
+      # peek across epoch boundaries and would no longer have a distribution
+      # the tests can name. The bounds exist for practical reasons (the alert
+      # must visibly resolve; the check-in timer must not false-alarm), so we
+      # honor them exactly with an alternating renewal process: fixed firings,
+      # i.i.d. truncated-exponential gaps, and a few words of state.
+      #
+      # Replaying every missed transition, rather than jumping to the current
+      # state, keeps the realized schedule identical whatever the scrape
+      # cadence. It costs one loop iteration per elapsed transition, about
+      # fifty a day at the defaults, so even a scrape after a week of silence
+      # is trivial.
+      @lock.synchronize do
+        now = @clock.call
+        while now >= @next_transition
+          @firing = !@firing
+          @next_transition += @firing ? @firing_duration : gap
+        end
+        @firing ? 1.0 : 0.0
+      end
+    end
+
     private
 
     def validate(mean, min, max, firing)
