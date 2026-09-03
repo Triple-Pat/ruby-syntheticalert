@@ -1,0 +1,8 @@
+coverage/
+pkg/
+*.gem
+.bundle/
+# local design docs, by preference never committed
+/docs/superpowers/
+# roborev snapshots
+/.roborev/

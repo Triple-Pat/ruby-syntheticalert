@@ -1,0 +1,22 @@
+plugins:
+  - rubocop-minitest
+  - rubocop-rake
+
+AllCops:
+  TargetRubyVersion: 3.3
+  NewCops: enable
+
+Style/TrailingCommaInHashLiteral:
+  EnforcedStyleForMultiline: consistent_comma
+Style/TrailingCommaInArrayLiteral:
+  EnforcedStyleForMultiline: consistent_comma
+Style/TrailingCommaInArguments:
+  EnforcedStyleForMultiline: consistent_comma
+
+Style/StringLiterals:
+  EnforcedStyle: double_quotes
+
+# Schedule tests walk one timeline and assert at each step; splitting them
+# would repeat the setup and hide the sequence.
+Minitest/MultipleAssertions:
+  Max: 10
