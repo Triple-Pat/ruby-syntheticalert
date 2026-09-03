@@ -39,10 +39,11 @@ module Triplepat
     MONOTONIC_CLOCK = -> { Process.clock_gettime(Process::CLOCK_MONOTONIC) }
     private_constant :MONOTONIC_CLOCK
 
-    # All durations are Floats in seconds. +clock+ returns the current time in
-    # seconds and must never go backwards; it exists for tests.
+    # All durations are numbers of seconds and are stored as Floats. +clock+
+    # returns the current time in seconds and must never go backwards; it
+    # exists for tests.
     #
-    # Raises ArgumentError if any duration is not positive and finite, the
+    # Raises ArgumentError if any duration is not a positive, finite number, the
     # firing duration is not shorter than the mean interval, or the min and
     # max intervals do not bracket the mean. Setting all three intervals
     # equal is allowed: the window has zero width, every gap is exactly that
@@ -51,11 +52,11 @@ module Triplepat
     def initialize(mean_interval: DEFAULT_MEAN_INTERVAL, min_interval: DEFAULT_MIN_INTERVAL,
                    max_interval: DEFAULT_MAX_INTERVAL, firing_duration: DEFAULT_FIRING_DURATION,
                    clock: MONOTONIC_CLOCK)
-      validate(mean_interval, min_interval, max_interval, firing_duration)
-      @mean = mean_interval
-      @min = min_interval
-      @max = max_interval
-      @firing_duration = firing_duration
+      @mean = duration("mean interval", mean_interval)
+      @min = duration("min interval", min_interval)
+      @max = duration("max interval", max_interval)
+      @firing_duration = duration("firing duration", firing_duration)
+      check_ordering(@mean, @min, @max, @firing_duration)
       @clock = clock
       @lock = Mutex.new
       @firing = false
@@ -104,12 +105,16 @@ module Triplepat
 
     private
 
-    def validate(mean, min, max, firing)
-      check_positive_and_finite("mean interval", mean)
-      check_positive_and_finite("min interval", min)
-      check_positive_and_finite("max interval", max)
-      check_positive_and_finite("firing duration", firing)
-      check_ordering(mean, min, max, firing)
+    # Returns the duration as a Float so the sampler's divisions are never
+    # Integer floor divisions, which would silently distort the distribution.
+    def duration(name, value)
+      raise ArgumentError, "#{name} must be a number, got #{value.inspect}" unless value.is_a?(Numeric)
+
+      value = value.to_f
+      # NaN compares false to everything, so it needs the explicit finite? check.
+      raise ArgumentError, "#{name} must be positive and finite, got #{value}" unless value.finite? && value.positive?
+
+      value
     end
 
     def check_ordering(mean, min, max, firing)
@@ -121,13 +126,6 @@ module Triplepat
 
       raise ArgumentError,
             "min interval (#{min}) and max interval (#{max}) must bracket the mean interval (#{mean})"
-    end
-
-    def check_positive_and_finite(name, value)
-      # NaN compares false to everything, so it needs the explicit finite? check.
-      return if value.finite? && value.positive?
-
-      raise ArgumentError, "#{name} must be positive and finite, got #{value}"
     end
 
     # Draw one silent gap from the exponential distribution with mean @mean,
@@ -142,12 +140,14 @@ module Triplepat
       # Work with the survival function S(x) = exp(-x / mean), which is strictly
       # positive at @min (@min <= @mean, so the exponent is at least -1) but
       # underflows to exactly 0.0 when @max is hundreds of means away. rand is
-      # in [0, 1), so 1.0 - rand is in (0, 1] and u lands in (s_max, s_min]:
-      # never equal to s_max, so Math.log never sees 0.
+      # in [0, 1), so 1.0 - rand is in (0, 1] and u lands in [s_max, s_min].
+      # Math.log never sees 0 because u is strictly positive either way: when
+      # s_max > 0 that is immediate, and when s_max underflowed to 0 the draw
+      # is (1.0 - rand) * s_min, at least 2^-53 * e^-1.
       s_max = Math.exp(-@max / @mean)
       s_min = Math.exp(-@min / @mean)
       u = s_max + ((1.0 - rand) * (s_min - s_max))
-      # Mathematically the draw is already in [@min, @max): this is not
+      # Mathematically the draw is already in [@min, @max]: this is not
       # clamping a distribution, it corrects the few ulps by which exp followed
       # by log can miss a round trip, so the bounds hold literally rather than
       # to within floating-point rounding.

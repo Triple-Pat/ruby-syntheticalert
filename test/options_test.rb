@@ -32,6 +32,30 @@ class OptionsTest < Minitest::Test
     end
   end
 
+  def test_each_duration_must_be_a_number
+    [nil, "60", :sixty].each do |bad|
+      error = assert_raises(ArgumentError, bad.inspect) { Triplepat::SyntheticAlert.new(mean_interval: bad) }
+
+      assert_match(/must be a number/, error.message)
+    end
+  end
+
+  # Integer arguments must not reach the sampler, where -600 / 3600 would be
+  # floor division and silently triple the effective minimum gap.
+  def test_integer_durations_are_coerced_to_floats
+    alert = Triplepat::SyntheticAlert.new(
+      mean_interval: 100, min_interval: 50, max_interval: 150, firing_duration: 1,
+    )
+
+    assert_instance_of Float, alert.instance_variable_get(:@mean)
+    assert_instance_of Float, alert.instance_variable_get(:@min)
+    assert_instance_of Float, alert.instance_variable_get(:@max)
+    assert_instance_of Float, alert.instance_variable_get(:@firing_duration)
+    gaps = Array.new(10_000) { alert.send(:gap) }
+
+    assert_operator gaps.min, :<, 100.0, "no gap below the mean: floor division in the sampler"
+  end
+
   def test_firing_duration_must_be_shorter_than_the_mean
     error = assert_raises(ArgumentError) do
       Triplepat::SyntheticAlert.new(mean_interval: 60.0, firing_duration: 60.0, min_interval: 60.0)
