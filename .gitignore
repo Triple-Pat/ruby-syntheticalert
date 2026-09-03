@@ -2,6 +2,7 @@ coverage/
 pkg/
 *.gem
 .bundle/
+vendor/
 # local design docs, by preference never committed
 /docs/superpowers/
 # roborev snapshots

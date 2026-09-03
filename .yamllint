@@ -11,3 +11,8 @@ rules:
   indentation:
     spaces: 2
     indent-sequences: consistent
+
+# ruby/setup-ruby's bundler-cache installs gems into vendor/bundle inside the
+# checkout, and third-party gems ship YAML we do not own.
+ignore:
+  - vendor/
