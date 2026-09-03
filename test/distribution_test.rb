@@ -62,11 +62,10 @@ class DistributionTest < Minitest::Test
     [DEFAULTS, FAR_MAX].each do |window|
       alert = Triplepat::SyntheticAlert.new(**window)
       statistics = Array.new(3) { ks_statistic(Array.new(N) { alert.send(:gap) }, **window) }
+      rounded = statistics.map { |d| d.round(4) }
 
       assert_operator statistics.min, :<=, KS_CRITICAL,
-                      "#{window}: K-S statistics #{statistics.map do |d|
-                        d.round(4)
-                      end} all exceed #{KS_CRITICAL.round(4)}"
+                      "#{window}: K-S statistics #{rounded} all exceed #{KS_CRITICAL.round(4)}"
     end
   end
 

@@ -34,3 +34,20 @@ class FakeClock
     @now += seconds
   end
 end
+
+# Invariants shared by the schedule and concurrency tests.
+module ScheduleInvariants
+  FIRING = Triplepat::SyntheticAlert::DEFAULT_FIRING_DURATION
+  MIN = Triplepat::SyntheticAlert::DEFAULT_MIN_INTERVAL
+  MAX = Triplepat::SyntheticAlert::DEFAULT_MAX_INTERVAL
+  TEN_DAYS = 10 * 24 * 3600.0
+
+  # After any scrape the next transition lies in the future and at most one
+  # cycle, a max gap plus a firing, away.
+  def assert_schedule_is_one_transition_ahead(alert, clock)
+    next_transition = alert.instance_variable_get(:@next_transition)
+
+    assert_operator next_transition, :>, clock.now
+    assert_operator next_transition, :<=, clock.now + MAX + FIRING
+  end
+end

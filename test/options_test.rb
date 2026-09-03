@@ -32,7 +32,7 @@ class OptionsTest < Minitest::Test
     end
   end
 
-  def test_each_duration_must_be_a_number
+  def test_each_duration_must_be_a_real_number
     [nil, "60", :sixty, Complex(60, 1)].each do |bad|
       error = assert_raises(ArgumentError, bad.inspect) { Triplepat::SyntheticAlert.new(mean_interval: bad) }
 

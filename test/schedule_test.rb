@@ -3,11 +3,9 @@
 require "test_helper"
 
 class ScheduleTest < Minitest::Test
+  include ScheduleInvariants
+
   EPSILON = 1e-6
-  FIRING = Triplepat::SyntheticAlert::DEFAULT_FIRING_DURATION
-  MIN = Triplepat::SyntheticAlert::DEFAULT_MIN_INTERVAL
-  MAX = Triplepat::SyntheticAlert::DEFAULT_MAX_INTERVAL
-  TEN_DAYS = 10 * 24 * 3600.0
   # Every cycle is one silent gap plus one firing, so ten days holds this many cycles.
   FEWEST_CYCLES = (TEN_DAYS / (MAX + FIRING)).floor
   MOST_CYCLES = (TEN_DAYS / (MIN + FIRING)).floor + 1
@@ -75,7 +73,7 @@ class ScheduleTest < Minitest::Test
     value = @alert.value
 
     assert_includes [0.0, 1.0], value
-    assert_schedule_is_one_transition_ahead
+    assert_schedule_is_one_transition_ahead(@alert, @clock)
     assert_operator draws.size, :>=, FEWEST_CYCLES, "one gap per replayed cycle"
     assert_operator draws.size, :<=, MOST_CYCLES, "one gap per replayed cycle"
   end
@@ -92,10 +90,5 @@ class ScheduleTest < Minitest::Test
       draws.last
     end
     draws
-  end
-
-  def assert_schedule_is_one_transition_ahead
-    assert_operator next_transition, :>, @clock.now
-    assert_operator next_transition, :<=, @clock.now + MAX + FIRING
   end
 end
