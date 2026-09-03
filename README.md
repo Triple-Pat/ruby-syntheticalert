@@ -81,7 +81,7 @@ use Prometheus::Middleware::Exporter
 This is for single-process servers. In Puma or Unicorn cluster mode every
 worker would have its own schedule, and no `DirectFileStore` aggregation
 reconciles them: `:max` keeps a worker's stale 1 in the aggregate until
-that worker happens to serve another request, which on a quiet server holds
+that worker happens to serve another scrape, which on a quiet server holds
 the alert firing indefinitely, and `:most_recent` follows whichever worker
 answered the scrape, so the alert flaps between schedules. Give the
 synthetic alert one process of its own instead; the prometheus_exporter
