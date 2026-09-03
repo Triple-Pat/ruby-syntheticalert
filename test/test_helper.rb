@@ -5,6 +5,9 @@ require "simplecov"
 SimpleCov.start do
   enable_coverage :branch
   cover "lib/**/*.rb"
+  # Bundler evaluates the gemspec, which requires version.rb, before this
+  # file runs, so those three lines can never register a hit.
+  skip "lib/triplepat/syntheticalert/version.rb"
   # CI adds the gate; keeping it out of local runs lets partial runs pass.
   if ENV["CI"]
     coverage :line, minimum: 100
