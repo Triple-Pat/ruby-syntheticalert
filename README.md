@@ -43,7 +43,8 @@ one you already run.
 ### prometheus-client
 
 The official client has no scrape-time hook, so set the gauge from a small
-Rack middleware placed ahead of the exporter:
+Rack middleware placed ahead of the exporter. It writes the value only on
+the metrics path, right before the exporter reads it:
 
 ```ruby
 require "prometheus/client"
@@ -56,10 +57,11 @@ gauge = Prometheus::Client.registry.gauge(
   docstring: "Set to 1 when the synthetic alert should fire and 0 otherwise. " \
              "Alert on this metric and route the alert to a Triple Pat check-in " \
              "timer to continuously test your alerting pipeline.",
-  store_settings: { aggregation: :max }, # only matters for DirectFileStore
 )
 
 class SyntheticAlertScrape
+  METRICS_PATH = "/metrics" # the exporter default; match its path: option
+
   def initialize(app, gauge, alert)
     @app = app
     @gauge = gauge
@@ -67,7 +69,7 @@ class SyntheticAlertScrape
   end
 
   def call(env)
-    @gauge.set(@alert.value)
+    @gauge.set(@alert.value) if env["PATH_INFO"] == METRICS_PATH
     @app.call(env)
   end
 end
@@ -76,12 +78,14 @@ use SyntheticAlertScrape, gauge, alert
 use Prometheus::Middleware::Exporter
 ```
 
-In Puma or Unicorn cluster mode every worker has its own schedule. With
-`DirectFileStore`, `aggregation: :max` makes the metric 1 whenever any
-worker's schedule says fire. Firings then come a little more often than one
-schedule would produce, and the guarantee that matters for sizing the timer,
-that no silent gap exceeds the max interval, still holds because every
-worker honors it on its own.
+This is for single-process servers. In Puma or Unicorn cluster mode every
+worker would have its own schedule, and no `DirectFileStore` aggregation
+reconciles them: `:max` keeps a worker's stale 1 in the aggregate until
+that worker happens to serve another request, which on a quiet server holds
+the alert firing indefinitely, and `:most_recent` follows whichever worker
+answered the scrape, so the alert flaps between schedules. Give the
+synthetic alert one process of its own instead; the prometheus_exporter
+collector below is the ready-made way to do that.
 
 ### prometheus_exporter
 
@@ -117,11 +121,14 @@ end
 ```
 
 Start the exporter with `bundle exec prometheus_exporter -a
-synthetic_alert_collector.rb`. One process, so no aggregation to think about.
+synthetic_alert_collector.rb`. The alert lives in that one process however
+many application workers there are, which is also the answer for
+prometheus-client and Yabeda users running in cluster mode.
 
 ### Yabeda
 
-Yabeda runs `collect` blocks on every scrape:
+Yabeda runs `collect` blocks on every scrape, in the worker that serves it.
+Like the prometheus-client wiring, this is for single-process servers:
 
 ```ruby
 require "yabeda"
@@ -129,10 +136,8 @@ require "triplepat/syntheticalert"
 
 alert = Triplepat::SyntheticAlert.new
 Yabeda.configure do
-  gauge :triplepat_synthetic_alert do
-    comment "Set to 1 when the synthetic alert should fire and 0 otherwise."
-    aggregation :max # cluster-mode servers, see prometheus-client above
-  end
+  gauge :triplepat_synthetic_alert,
+        comment: "Set to 1 when the synthetic alert should fire and 0 otherwise."
   collect { Yabeda.triplepat_synthetic_alert.set({}, alert.value) }
 end
 ```
