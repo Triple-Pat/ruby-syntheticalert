@@ -1,3 +1,5 @@
+[![Lint and Test](https://github.com/Triple-Pat/ruby-syntheticalert/actions/workflows/ci.yml/badge.svg)](https://github.com/Triple-Pat/ruby-syntheticalert/actions/workflows/ci.yml) [![Coverage Status](https://coveralls.io/repos/github/Triple-Pat/ruby-syntheticalert/badge.svg?branch=main)](https://coveralls.io/github/Triple-Pat/ruby-syntheticalert?branch=main)
+
 # ruby-syntheticalert
 
 Drive a synthetic alert metric from Ruby, so a
