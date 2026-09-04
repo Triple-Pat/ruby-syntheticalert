@@ -8,11 +8,9 @@ SimpleCov.start do
   # Bundler evaluates the gemspec, which requires version.rb, before this
   # file runs, so those three lines can never register a hit.
   skip "lib/triplepat/syntheticalert/version.rb"
-  # CI adds the gate; keeping it out of local runs lets partial runs pass.
-  if ENV["CI"]
-    coverage :line, minimum: 100
-    coverage :branch, minimum: 100
-  end
+  # The 100% gate is `rake coverage:check`, a separate step so CI can upload
+  # the measured number first; keeping it out of the test run lets partial
+  # local runs pass.
 end
 
 require "triplepat/syntheticalert"
