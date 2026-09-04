@@ -80,14 +80,18 @@ use SyntheticAlertScrape, gauge, alert
 use Prometheus::Middleware::Exporter
 ```
 
-This is for single-process servers. In Puma or Unicorn cluster mode every
-worker would have its own schedule, and no `DirectFileStore` aggregation
-reconciles them: `:max` keeps a worker's stale 1 in the aggregate until
-that worker happens to serve another scrape, which on a quiet server holds
-the alert firing indefinitely, and `:most_recent` follows whichever worker
-answered the scrape, so the alert flaps between schedules. Give the
-synthetic alert one process of its own instead; the prometheus_exporter
-collector below is the ready-made way to do that.
+This is for single-process servers. In a multi-process server the
+synthetic alert must come from exactly one process. The principle is worth
+stating on its own: a synthetic alert is a schedule, and a schedule has to
+have one owner. In Puma or Unicorn cluster mode every worker would have its
+own schedule, and no `DirectFileStore` aggregation reconciles them: `:max`
+keeps a worker's stale 1 in the aggregate until that worker happens to
+serve another scrape, which on a quiet server holds the alert firing
+indefinitely, and `:most_recent` follows whichever worker answered the
+scrape, so the alert flaps between schedules. Whether the one owner is the
+master process or a small exporter of its own is a deployment choice; what
+matters is that there is one. In Ruby the ready-made owner is the
+prometheus_exporter collector below, which runs in a process of its own.
 
 ### prometheus_exporter
 
@@ -148,7 +152,9 @@ end
 
 The Ruby metrics SDK calls an observable gauge's callback with no arguments
 and takes a bare number back. The OTel-to-Prometheus exporter turns the
-dotted metric name into `triplepat_synthetic_alert`:
+dotted metric name into `triplepat_synthetic_alert`. The one-owner
+principle applies here too: register the observable gauge in exactly one
+process.
 
 ```ruby
 meter.create_observable_gauge(
