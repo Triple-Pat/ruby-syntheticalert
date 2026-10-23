@@ -28,9 +28,13 @@ jobs:
           # No cache on release tags: the published gem is built here, and
           # nothing an earlier run could have written may run beside it.
           bundler-cache: ${{ !startsWith(github.ref, 'refs/tags/') }}
+      # Frozen, as setup-ruby's cached install is: a Gemfile that disagrees
+      # with Gemfile.lock fails the run instead of re-resolving.
       - name: Install gems without the cache
         if: startsWith(github.ref, 'refs/tags/')
         run: bundle install
+        env:
+          BUNDLE_FROZEN: "true"
 
       # --- Linting ---
       - name: YAML Lint
