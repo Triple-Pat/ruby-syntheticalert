@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    triplepat-syntheticalert (0.0.0)
+    triplepat-syntheticalert (0.1.0)
 
 GEM
   remote: https://rubygems.org/
@@ -83,7 +83,7 @@ CHECKSUMS
   rubocop-rake (0.7.1) sha256=3797f2b6810c3e9df7376c26d5f44f3475eda59eb1adc38e6f62ecf027cbae4d
   ruby-progressbar (1.13.0) sha256=80fc9c47a9b640d6834e0dc7b3c94c9df37f08cb072b7761e4a71e22cff29b33
   simplecov (1.3.2) sha256=2a22ec1759f1b8db60881a2e038758956fc69ef93ed669be0bde0678de6d0e85
-  triplepat-syntheticalert (0.0.0)
+  triplepat-syntheticalert (0.1.0)
   unicode-display_width (3.3.0) sha256=4b7aa66a4b11db50f6f7e98411215cd0dd10eaecb665d36eec5bcacb3fa0b613
   unicode-emoji (4.3.0) sha256=11c02fa73290378c066bb0562cd4c87d8e1b706fbbe0059ca12746a4244de8ce
 
