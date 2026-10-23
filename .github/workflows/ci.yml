@@ -5,6 +5,8 @@ on:
     branches:
       - main
   pull_request:
+  # The release workflow runs this whole suite before it publishes.
+  workflow_call:
 permissions:
   contents: read
 jobs:
@@ -14,19 +16,37 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ruby-version: ["3.3", "3.4", "4.0"]
+        # Newest first: the one-leg steps below run on job-index 0.
+        ruby-version: ["4.0", "3.4", "3.3"]
     steps:
-      - uses: actions/checkout@v7
-      - uses: ruby/setup-ruby@v1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ruby/setup-ruby@26e5b7d197ebf60545ee9667bcbace0be11ccaec # v1.334.0
         with:
           ruby-version: ${{ matrix.ruby-version }}
-          bundler-cache: true
+          # No cache on release tags: the published gem is built here, and
+          # nothing an earlier run could have written may run beside it.
+          bundler-cache: ${{ !startsWith(github.ref, 'refs/tags/') }}
+      # Frozen, as setup-ruby's cached install is: a Gemfile that disagrees
+      # with Gemfile.lock fails the run instead of re-resolving.
+      - name: Install gems without the cache
+        if: startsWith(github.ref, 'refs/tags/')
+        run: bundle install
+        env:
+          BUNDLE_FROZEN: "true"
 
       # --- Linting ---
       - name: YAML Lint
-        uses: ibiqlik/action-yamllint@v3
+        uses: ibiqlik/action-yamllint@2576378a8e339169678f9939646ee3ee325e845c # v3.1.1
         with:
           config_file: .yamllint
+      # Ruby-independent, so one leg is enough.
+      - name: GitHub Actions Security Lint
+        if: strategy.job-index == 0
+        run: pipx run zizmor --format=github .
+        env:
+          GH_TOKEN: ${{ github.token }}
       - name: RuboCop
         run: bundle exec rubocop
 
@@ -43,10 +63,41 @@ jobs:
       # fail-on-error: false.
       - name: Coveralls
         if: github.ref == 'refs/heads/main' && strategy.job-index == 0
-        uses: coverallsapp/github-action@v2
+        uses: coverallsapp/github-action@8d6379e14d29928660c4ba802d8e85393440b329 # v2.3.8
         with:
           file: coverage/.resultset.json
           format: simplecov
           fail-on-error: false
       - name: Coverage gate
         run: bundle exec rake coverage:check
+
+      # --- Packaging ---
+      # Checks what a release would upload, on every commit, so the first
+      # push to RubyGems is not the first time the gem is built: the gemspec
+      # passes validation with warnings as errors, and the gem installs and
+      # loads in an empty gem directory, without Bundler or the dev
+      # dependencies.
+      - name: Build
+        run: |
+          gem build --strict triplepat-syntheticalert.gemspec
+          mkdir -p pkg
+          mv ./*.gem pkg/
+      - name: Install the gem into an empty gem directory
+        env:
+          GEM_HOME: ${{ runner.temp }}/gems
+          GEM_PATH: ${{ runner.temp }}/gems
+        # Installs our own just-built gem; --local fetches nothing.
+        run: | # zizmor: ignore[adhoc-packages]
+          gem install --local --no-document pkg/*.gem
+          ruby -e 'require "triplepat/syntheticalert"; p Triplepat::SyntheticAlert.new.value'
+      # On a release tag, the release workflow publishes exactly this file,
+      # the one the checks above passed, so its job that holds publishing
+      # rights never runs a build. The gem is pure Ruby, so any leg's build
+      # serves.
+      - name: Keep the gem for the release
+        if: strategy.job-index == 0 && startsWith(github.ref, 'refs/tags/v')
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: gem
+          path: pkg/
+          if-no-files-found: error
