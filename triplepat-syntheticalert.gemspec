@@ -6,8 +6,8 @@ Gem::Specification.new do |spec|
   spec.name = "triplepat-syntheticalert"
   spec.version = Triplepat::SyntheticAlert::VERSION
   spec.authors = ["Triple Pat"]
-  spec.summary = "A synthetic alert measurement callback, so a Triple Pat check-in timer " \
-                 "can verify your alerting pipeline end to end."
+  spec.summary = "A time-based callback to drive a synthetic alert metric, so a Triple Pat " \
+                 "check-in timer can verify your alerting pipeline end to end."
   spec.description = "Provides a time-based callback to drive a synthetic alert metric. " \
                      "Register it as a gauge, alert on the gauge, and route the alert to a " \
                      "Triple Pat check-in timer; if the check-ins stop, your alerting is broken."
