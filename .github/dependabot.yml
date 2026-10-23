@@ -1,0 +1,27 @@
+# https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+version: 2
+
+# Every ecosystem below joins this group, so all updates arrive as one
+# weekly PR instead of one per ecosystem. The gem itself has no
+# runtime dependencies; bundler here keeps the dev group's Gemfile.lock current.
+multi-ecosystem-groups:
+  everything:
+    schedule:
+      interval: "weekly"
+
+# Every ecosystem lets a release age a week before proposing it, so a
+# compromised release is likely caught upstream first. Security updates skip
+# cooldown.
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    multi-ecosystem-group: "everything"
+    cooldown:
+      default-days: 7
+    patterns: ["*"]
+  - package-ecosystem: "bundler"
+    directory: "/"
+    multi-ecosystem-group: "everything"
+    cooldown:
+      default-days: 7
+    patterns: ["*"]
